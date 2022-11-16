@@ -1,1 +1,2 @@
-# TSQL_Exercises-8weeksqlchallenge-case-study-1
+# 8 Week SQL Challenge
+https://8weeksqlchallenge.com/
