@@ -283,3 +283,64 @@ from
 group by
     [customer_id],
     sm_poin
+    /*
+     ==================================== Bonus Questions ====================================
+     ------------------------------------Join All The Things
+     */
+SELECT
+    s.[customer_id],
+    s.[order_date],
+    mu.product_name,
+    mu.price,
+    case
+        when (
+            s.[order_date] < mb.join_date
+            OR mb.join_date IS NULL
+        ) Then 'N'
+        else 'Y'
+    end as [Status]
+FROM
+    [dannys_diner].[dbo].[sales] s
+    left join [dannys_diner].[dbo].[members] mb on mb.customer_id = s.customer_id
+    join [dannys_diner].[dbo].menu mu on mu.product_id = s.product_id
+    /*
+     ------------------------------------Rank All The Things
+     */
+SELECT
+    s.[customer_id],
+    s.[order_date],
+    mu.product_name,
+    mu.price,
+case
+        when (
+            s.[order_date] < mb.join_date
+            OR mb.join_date IS NULL
+        ) Then 'N'
+        else 'Y'
+    end as [Status],
+    case
+        when (
+            s.[order_date] < mb.join_date
+            OR mb.join_date IS NULL
+        ) then NULL
+        else RANK() over (
+            partition by case
+                when (
+                    s.[order_date] < mb.join_date
+                    OR mb.join_date IS NULL
+                ) Then NULL
+                else s.[customer_id]
+            end
+            order by
+                s.[order_date],
+                mu.product_name
+        )
+    end rnk
+FROM
+    [dannys_diner].[dbo].[sales] s
+    left join [dannys_diner].[dbo].[members] mb on mb.customer_id = s.customer_id
+    join [dannys_diner].[dbo].menu mu on mu.product_id = s.product_id
+order by
+    s.[customer_id],
+    s.[order_date],
+    mu.product_name
