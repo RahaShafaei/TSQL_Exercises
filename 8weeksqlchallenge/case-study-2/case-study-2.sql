@@ -295,10 +295,108 @@ group by
     [runner_id] -- ************************************************* C. Ingredient Optimisation
     /*========================================================================*/
     -- 1 - What are the standard ingredients for each pizza?
+;
+
+with top_num as(
+    SELECT
+        [pizza_id],
+        spl.value top_id
+    FROM
+        [pizza_runner].[dbo].[pizza_recipes] pr
+        CROSS APPLY STRING_SPLIT(cast(pr.[toppings] as nvarchar(max)), ',') spl
+)
+select
+    [pizza_id],
+    pt.topping_name
+from
+    top_num tn
+    join [pizza_runner].[dbo].[pizza_toppings] pt on pt.topping_id = tn.top_id
     /*========================================================================*/
     -- 2 - What was the most commonly added extra?
+;
+
+with exts as (
+    select
+        extras
+    from
+        (
+            values
+                (1)
+        ) tb(n)
+        cross join (
+            select
+                extras
+            from
+                [pizza_runner].[dbo].[customer_orders]
+            where
+                extras is not null
+        ) ext
+),
+exts_max as(
+    select
+        pt.topping_name,
+        count(cast(replace(spl.value, ' ', '') as int)) over (
+            partition by cast(replace(spl.value, ' ', '') as int)
+        ) top_id
+    from
+        exts
+        CROSS APPLY STRING_SPLIT(cast(extras as nvarchar(max)), ',') spl
+        join [pizza_runner].[dbo].[pizza_toppings] pt on cast(replace(spl.value, ' ', '') as int) = pt.topping_id
+)
+select
+    top 1 topping_name
+from
+    exts_max
+where
+    top_id = (
+        select
+            max(top_id)
+        from
+            exts_max
+    )
     /*========================================================================*/
     -- 3 - What was the most common exclusion?
+;
+
+with exts as (
+    select
+        [exclusions]
+    from
+        (
+            values
+                (1)
+        ) tb(n)
+        cross join (
+            select
+                [exclusions]
+            from
+                [pizza_runner].[dbo].[customer_orders]
+            where
+                [exclusions] is not null
+        ) ext
+),
+exts_max as(
+    select
+        pt.topping_name,
+        count(cast(replace(spl.value, ' ', '') as int)) over (
+            partition by cast(replace(spl.value, ' ', '') as int)
+        ) top_id
+    from
+        exts
+        CROSS APPLY STRING_SPLIT(cast([exclusions] as nvarchar(max)), ',') spl
+        join [pizza_runner].[dbo].[pizza_toppings] pt on cast(replace(spl.value, ' ', '') as int) = pt.topping_id
+)
+select
+    top 1 topping_name
+from
+    exts_max
+where
+    top_id = (
+        select
+            max(top_id)
+        from
+            exts_max
+    )
     /*========================================================================*/
     /* 4 - Generate an order item for each record in the customers_orders table in the format of one of the following:
      Meat Lovers
@@ -306,6 +404,87 @@ group by
      Meat Lovers - Extra Bacon
      Meat Lovers - Exclude Cheese, Bacon - Extra Mushroom, Peppers
      */
+;
+
+with co_unq_id as (
+    SELECT
+        ROW_NUMBER() over(
+            order by
+                [order_id]
+        ) id,
+        [order_id],
+        [customer_id],
+        cast (pn.pizza_name as nvarchar(max)) pizza_name,
+        [exclusions],
+        [extras]
+    FROM
+        [pizza_runner].[dbo].[customer_orders] co
+        join [pizza_runner].[dbo].[pizza_names] pn on co.pizza_id = pn.pizza_id
+),
+exclu_concat as(
+    select
+        id,
+        string_agg(
+            cast (pt_exclu.topping_name as nvarchar(max)),
+            ','
+        ) esclus_top
+    from
+        co_unq_id
+        CROSS APPLY STRING_SPLIT(
+            cast(
+                (
+                    case
+                        when [exclusions] is null then '0'
+                        else [exclusions]
+                    end
+                ) as nvarchar(max)
+            ),
+            ','
+        ) spl_exclu
+        left join [pizza_runner].[dbo].[pizza_toppings] pt_exclu on cast(replace(spl_exclu.value, ' ', '') as int) = pt_exclu.topping_id
+    group by
+        id
+),
+exctra_concat as(
+    select
+        id,
+        string_agg(
+            cast (pt_extr.topping_name as nvarchar(max)),
+            ','
+        ) extr_top
+    from
+        co_unq_id
+        CROSS APPLY STRING_SPLIT(
+            cast(
+                (
+                    case
+                        when [extras] is null then '0'
+                        else [extras]
+                    end
+                ) as nvarchar(max)
+            ),
+            ','
+        ) spl_extr
+        left join [pizza_runner].[dbo].[pizza_toppings] pt_extr on cast(replace(spl_extr.value, ' ', '') as int) = pt_extr.topping_id
+    group by
+        id
+)
+select
+    co_unq_id.pizza_name + (
+        case
+            when exclu_concat.esclus_top is null then ''
+            else ' - Exclude ' + exclu_concat.esclus_top
+        end
+    ) + (
+        case
+            when exctra_concat.extr_top is null then ''
+            else ' - Extra ' + exctra_concat.extr_top
+        end
+    ) orders
+from
+    co_unq_id
+    join exclu_concat on co_unq_id.id = exclu_concat.id
+    join exctra_concat on co_unq_id.id = exctra_concat.id
     /*========================================================================*/
     /* 5 - Generate an alphabetically ordered comma separated ingredient list for each pizza order from the customer_orders table and add a 2x in front of any relevant ingredients
      For example: "Meat Lovers: 2xBacon, Beef, ... , Salami"*/
