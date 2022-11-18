@@ -127,30 +127,172 @@ order by
     co.[customer_id]
     /*========================================================================*/
     -- 6 - What was the maximum number of pizzas delivered in a single order?
+;
+
+with mx_ord as(
+    SELECT
+        co.order_id,
+        count(co.order_id) cnt_ord
+    FROM
+        [pizza_runner].[dbo].[runner_orders] ro
+        join [pizza_runner].[dbo].[customer_orders] co on co.order_id = ro.order_id
+        and ro.pickup_time is not null
+    group by
+        co.order_id
+)
+select
+    max(cnt_ord) max_ord
+from
+    mx_ord
     /*========================================================================*/
     -- 7 - For each customer, how many delivered pizzas had at least 1 change and how many had no changes?
+select
+    co.customer_id,
+    count(co.[exclusions]) cnt_exc,
+    count(co.[extras]) cnt_ext
+FROM
+    [pizza_runner].[dbo].[runner_orders] ro
+    join [pizza_runner].[dbo].[customer_orders] co on co.order_id = ro.order_id
+    and ro.pickup_time is not null
+group by
+    co.customer_id
     /*========================================================================*/
     -- 8 - How many pizzas were delivered that had both exclusions and extras?
+select
+    co.customer_id,
+    count(co.[exclusions]) cnt_exc,
+    count(co.[extras]) cnt_ext
+FROM
+    [pizza_runner].[dbo].[runner_orders] ro
+    join [pizza_runner].[dbo].[customer_orders] co on co.order_id = ro.order_id
+    and ro.pickup_time is not null
+group by
+    co.customer_id
+having
+    count(co.[exclusions]) != 0
+    and count(co.[extras]) != 0
     /*========================================================================*/
     -- 9 - What was the total volume of pizzas ordered for each hour of the day?
+SELECT
+    DATEPART(HOUR, [order_time]) hr,
+    count(*) cnt
+FROM
+    [pizza_runner].[dbo].[customer_orders]
+group by
+    DATEPART(HOUR, [order_time])
+order by
+    DATEPART(HOUR, [order_time])
     /*========================================================================*/
     -- 10 - What was the volume of orders for each day of the week?
-    -- ************************************************* B. Runner and Customer Experience
+SELECT
+    cast([order_time] as Date) dt,
+    count(*) cnt
+FROM
+    [pizza_runner].[dbo].[customer_orders]
+group by
+    cast([order_time] as Date)
+order by
+    cast([order_time] as Date) -- ************************************************* B. Runner and Customer Experience
     /*========================================================================*/
     -- 1 - How many runners signed up for each 1 week period? (i.e. week starts 2021-01-01)
+SELECT
+    DATEPART(week, [registration_date]) we_num,
+    count(*) cnt_rn
+FROM
+    [pizza_runner].[dbo].[runners]
+group by
+    DATEPART(week, [registration_date])
     /*========================================================================*/
     -- 2 - What was the average time in minutes it took for each runner to arrive at the Pizza Runner HQ to pickup the order?
+SELECT
+    ro.runner_id,
+    avg(datediff(minute, [order_time], pickup_time))
+FROM
+    [pizza_runner].[dbo].[runner_orders] ro
+    join [pizza_runner].[dbo].[customer_orders] co on co.order_id = ro.order_id
+    and ro.pickup_time is not null
+group by
+    ro.runner_id
     /*========================================================================*/
     -- 3 - Is there any relationship between the number of pizzas and how long the order takes to prepare?
+    -- Answer: Accordin to result of guery "No there isn't"
+select
+    ro.order_id,
+    count(*) cnt,
+    ro.duration,
+    ro.duration / count(*) each_piz
+FROM
+    [pizza_runner].[dbo].[runner_orders] ro
+    join [pizza_runner].[dbo].[customer_orders] co on co.order_id = ro.order_id
+    and ro.pickup_time is not null
+group by
+    ro.order_id,
+    ro.duration
     /*========================================================================*/
     -- 4 - What was the average distance travelled for each customer?
+;
+
+with avg_dis as (
+    select
+        co.customer_id,
+        ro.distance,
+        avg(cast(ro.distance as float)) over (partition by co.customer_id) as avf_dist
+    FROM
+        [pizza_runner].[dbo].[runner_orders] ro
+        join [pizza_runner].[dbo].[customer_orders] co on co.order_id = ro.order_id
+        and ro.pickup_time is not null
+    group by
+        ro.order_id,
+        co.customer_id,
+        ro.distance
+)
+select
+    customer_id,
+    avf_dist
+from
+    avg_dis
+group by
+    customer_id,
+    avf_dist
     /*========================================================================*/
     -- 5 - What was the difference between the longest and shortest delivery times for all orders?
+SELECT
+    co.order_id,
+    datediff(minute, [order_time], pickup_time) min_dur,
+    datediff(minute, [order_time], pickup_time) + duration man_dur
+FROM
+    [pizza_runner].[dbo].[runner_orders] ro
+    join [pizza_runner].[dbo].[customer_orders] co on co.order_id = ro.order_id
+    and ro.pickup_time is not null
+group by
+    co.order_id,
+    [order_time],
+    pickup_time,
+    duration
     /*========================================================================*/
     -- 6 - What was the average speed for each runner for each delivery and do you notice any trend for these values?
+    -- Answer: Accordin to result of guery "Runner 1 is activer that the others"
+SELECT
+    [runner_id],
+    count(order_id) ord_mun,
+    avg(cast ([duration] as int)) avg_dur
+FROM
+    [pizza_runner].[dbo].[runner_orders]
+where
+    duration is not null
+group by
+    [runner_id]
     /*========================================================================*/
     -- 7 - What is the successful delivery percentage for each runner?
-    -- ************************************************* C. Ingredient Optimisation
+SELECT
+    [runner_id],
+    cast (
+        (COUNT(pickup_time) /(COUNT(order_id) * 1.0)) * 100 as int
+    ) percent_suc
+FROM
+    [pizza_runner].[dbo].[runner_orders]
+group by
+    [runner_id] -- ************************************************* C. Ingredient Optimisation
     /*========================================================================*/
     -- 1 - What are the standard ingredients for each pizza?
     /*========================================================================*/
