@@ -488,6 +488,85 @@ from
     /*========================================================================*/
     /* 5 - Generate an alphabetically ordered comma separated ingredient list for each pizza order from the customer_orders table and add a 2x in front of any relevant ingredients
      For example: "Meat Lovers: 2xBacon, Beef, ... , Salami"*/
+;
+
+with co_unq_id as (
+    SELECT
+        ROW_NUMBER() over(
+            order by
+                [order_id]
+        ) id,
+        pn.pizza_id,
+        cast (pn.pizza_name as nvarchar(max)) pizza_name,
+        [exclusions],
+        [extras]
+    FROM
+        [pizza_runner].[dbo].[customer_orders] co
+        join [pizza_runner].[dbo].[pizza_names] pn on co.pizza_id = pn.pizza_id
+)
+select
+    id,
+    string_agg(
+        cast (topping_name as nvarchar(max)),
+        ','
+    ) ingredients
+from
+    (
+        select
+            cast (tb.id as nvarchar(max)) + '_' + tb.pizza_name + ': ' id,
+case
+                when count(*) > 1 then (cast(count(*) as nvarchar(max)) + 'x')
+                else ''
+            end + tb.topping_name topping_name
+        from
+            (
+                (
+                    select
+                        co_unq_id.id,
+                        co_unq_id.pizza_id,
+                        co_unq_id.pizza_name,
+                        cast(replace(spl_rec.value, ' ', '') as int) rec_id,
+                        cast (pt.topping_name as nvarchar(max)) topping_name
+                    from
+                        co_unq_id
+                        join [pizza_runner].[dbo].[pizza_recipes] pr on pr.pizza_id = co_unq_id.pizza_id
+                        outer APPLY STRING_SPLIT(cast(pr.toppings as nvarchar(max)), ',') spl_rec
+                        left join [pizza_runner].[dbo].[pizza_toppings] pt on pt.topping_id = cast(replace(spl_rec.value, ' ', '') as int)
+                )
+                EXCEPT
+                    (
+                        select
+                            co_unq_id.id,
+                            co_unq_id.pizza_id,
+                            co_unq_id.pizza_name,
+                            cast(replace(spl.value, ' ', '') as int) rec_id,
+                            cast (pt.topping_name as nvarchar(max)) topping_name
+                        from
+                            co_unq_id
+                            CROSS APPLY STRING_SPLIT(cast([exclusions] as nvarchar(max)), ',') spl
+                            left join [pizza_runner].[dbo].[pizza_toppings] pt on pt.topping_id = cast(replace(spl.value, ' ', '') as int)
+                    )
+                UNION
+                ALL (
+                    select
+                        co_unq_id.id,
+                        co_unq_id.pizza_id,
+                        co_unq_id.pizza_name,
+                        cast(replace(spl.value, ' ', '') as int) rec_id,
+                        cast (pt.topping_name as nvarchar(max)) topping_name
+                    from
+                        co_unq_id
+                        CROSS APPLY STRING_SPLIT(cast([extras] as nvarchar(max)), ',') spl
+                        left join [pizza_runner].[dbo].[pizza_toppings] pt on pt.topping_id = cast(replace(spl.value, ' ', '') as int)
+                )
+            ) as tb
+        group by
+            tb.id,
+            tb.pizza_name,
+            tb.topping_name
+    ) tb2
+group by
+    id
     /*========================================================================*/
     -- 6 - What is the total quantity of each ingredient used in all delivered pizzas sorted by most frequent first?
     -- ************************************************* D. Pricing and Ratings
