@@ -514,7 +514,7 @@ from
     (
         select
             cast (tb.id as nvarchar(max)) + '_' + tb.pizza_name + ': ' id,
-case
+            case
                 when count(*) > 1 then (cast(count(*) as nvarchar(max)) + 'x')
                 else ''
             end + tb.topping_name topping_name
@@ -569,17 +569,147 @@ group by
     id
     /*========================================================================*/
     -- 6 - What is the total quantity of each ingredient used in all delivered pizzas sorted by most frequent first?
-    -- ************************************************* D. Pricing and Ratings
+;
+
+with co_unq_id as (
+    SELECT
+        ROW_NUMBER() over(
+            order by
+                [order_id]
+        ) id,
+        pn.pizza_id,
+        cast (pn.pizza_name as nvarchar(max)) pizza_name,
+        [exclusions],
+        [extras]
+    FROM
+        [pizza_runner].[dbo].[customer_orders] co
+        join [pizza_runner].[dbo].[pizza_names] pn on co.pizza_id = pn.pizza_id
+)
+select
+    tb.topping_name topping_name,
+    count(*) cnt_top
+from
+    (
+        (
+            select
+                co_unq_id.id,
+                co_unq_id.pizza_id,
+                co_unq_id.pizza_name,
+                cast(replace(spl_rec.value, ' ', '') as int) rec_id,
+                cast (pt.topping_name as nvarchar(max)) topping_name
+            from
+                co_unq_id
+                join [pizza_runner].[dbo].[pizza_recipes] pr on pr.pizza_id = co_unq_id.pizza_id
+                outer APPLY STRING_SPLIT(cast(pr.toppings as nvarchar(max)), ',') spl_rec
+                left join [pizza_runner].[dbo].[pizza_toppings] pt on pt.topping_id = cast(replace(spl_rec.value, ' ', '') as int)
+        )
+        EXCEPT
+            (
+                select
+                    co_unq_id.id,
+                    co_unq_id.pizza_id,
+                    co_unq_id.pizza_name,
+                    cast(replace(spl.value, ' ', '') as int) rec_id,
+                    cast (pt.topping_name as nvarchar(max)) topping_name
+                from
+                    co_unq_id
+                    CROSS APPLY STRING_SPLIT(cast([exclusions] as nvarchar(max)), ',') spl
+                    left join [pizza_runner].[dbo].[pizza_toppings] pt on pt.topping_id = cast(replace(spl.value, ' ', '') as int)
+            )
+        UNION
+        ALL (
+            select
+                co_unq_id.id,
+                co_unq_id.pizza_id,
+                co_unq_id.pizza_name,
+                cast(replace(spl.value, ' ', '') as int) rec_id,
+                cast (pt.topping_name as nvarchar(max)) topping_name
+            from
+                co_unq_id
+                CROSS APPLY STRING_SPLIT(cast([extras] as nvarchar(max)), ',') spl
+                left join [pizza_runner].[dbo].[pizza_toppings] pt on pt.topping_id = cast(replace(spl.value, ' ', '') as int)
+        )
+    ) as tb
+group by
+    tb.topping_name
+order by
+    count(*) desc -- ************************************************* D. Pricing and Ratings
     /*========================================================================*/
     /* 1 - If a Meat Lovers pizza costs $12 and Vegetarian costs $10 and there were no charges for changes - 
      how much money has Pizza Runner made so far if there are no delivery fees?*/
+select
+    sum(
+        case
+            when c.pizza_id = 1 then 12
+            else 10
+        end
+    ) sum_piz
+from
+    pizza_runner.dbo.customer_orders c
+    join pizza_runner.dbo.runner_orders r on c.order_id = r.order_id
+    and r.pickup_time is not null
     /*========================================================================*/
     -- 2 - What was the most commonly added extra?
+;
+
+with cnt_topping as (
+    select
+        cast (t.topping_name as nvarchar(max)) topping_name,
+        count(*) cnt_top
+    from
+        pizza_runner.dbo.customer_orders c
+        CROSS APPLY STRING_SPLIT(cast(c.[extras] as nvarchar(max)), ',') spl
+        join pizza_runner.dbo.pizza_toppings t on cast (replace(spl.value, ' ', '') as int) = t.topping_id
+    where
+        c.extras is not null
+    group by
+        cast (t.topping_name as nvarchar(max))
+)
+select
+    topping_name,
+    cnt_top
+from
+    cnt_topping
+where
+    cnt_top = (
+        select
+            max(cnt_top)
+        from
+            cnt_topping
+    )
     /*========================================================================*/
     /* 3 - The Pizza Runner team now wants to add an additional ratings system that allows customers to rate their runner, 
      how would you design an additional table for this new dataset - 
      generate a schema for this new table and insert your own data for ratings for each successful customer order between 1 to 5.
      */
+    CREATE TABLE [dbo].[runner_rate](
+        [ID] [int] NOT NULL,
+        [order_id] [int] NULL,
+        [rate_number] [int] NULL
+    ) ON [PRIMARY]
+    /*---------------------------------------------------*/
+    /*---------------------------------------------------*/
+    USE [pizza_runner]
+GO
+INSERT INTO
+    [dbo].[runner_rate] (
+        [ID],
+        [order_id],
+        [rate_number]
+    )
+VALUES
+    (1, 1, FLOOR(RAND() *(6 -1) + 1)),
+    (2, 2, FLOOR(RAND() *(6 -1) + 1)),
+    (3, 3, FLOOR(RAND() *(6 -1) + 1)),
+    (4, 4, FLOOR(RAND() *(6 -1) + 1)),
+    (5, 5, FLOOR(RAND() *(6 -1) + 1)),
+    (6, 6, FLOOR(RAND() *(6 -1) + 1)),
+    (7, 7, FLOOR(RAND() *(6 -1) + 1)),
+    (8, 8, FLOOR(RAND() *(6 -1) + 1)),
+    (9, 9, FLOOR(RAND() *(6 -1) + 1)),
+    (10, 10, FLOOR(RAND() *(6 -1) + 1));
+
+GO
     /*========================================================================*/
     /* 4 - Using your newly generated table - can you join all of the information together to form a table which has the following information for successful deliveries?
      customer_id
@@ -593,13 +723,77 @@ group by
      Average speed
      Total number of pizzas
      */
+SELECT
+    co.customer_id,
+    ro.order_id,
+    ro.runner_id,
+    rr.rate_number,
+    co.order_time,
+    ro.pickup_time,
+    datediff(minute, co.[order_time], ro.pickup_time) diff_time,
+    ro.duration,
+    avg(cast(replace(ro.duration, ' ', '') as int)) over (partition by ro.runner_id) avg_speed,
+    count(*) Tot_num_piz
+FROM
+    [pizza_runner].[dbo].[customer_orders] co
+    join [pizza_runner].[dbo].runner_orders ro on ro.order_id = co.order_id
+    and ro.pickup_time is not null
+    join [pizza_runner].[dbo].runner_rate rr on rr.order_id = ro.order_id
+group by
+    co.customer_id,
+    ro.order_id,
+    ro.runner_id,
+    rr.rate_number,
+    co.order_time,
+    ro.pickup_time,
+    ro.duration
     /*========================================================================*/
     /* 5 - If a Meat Lovers pizza was $12 and Vegetarian $10 fixed prices with no cost for extras 
      and each runner is paid $0.30 per kilometre traveled - how much money does Pizza Runner have left over after these deliveries?
      */
+;
+
+with remain_cost as(
+    select
+        r.order_id,
+        sum(
+            case
+                when c.pizza_id = 1 then 12
+                else 10
+            end
+        ) - (
+            cast(replace(r.distance, ' ', '') as float) * 0.30
+        ) sum_rem
+    from
+        pizza_runner.dbo.customer_orders c
+        join pizza_runner.dbo.runner_orders r on c.order_id = r.order_id
+        and r.pickup_time is not null
+    group by
+        r.order_id,
+        r.distance
+)
+select
+    sum(sum_rem) sum_remain
+from
+    remain_cost
     /*
      ==================================== Bonus Questions ====================================
      If Danny wants to expand his range of pizzas - how would this impact the existing data design? 
      Write an INSERT statement to demonstrate what would happen if a new Supreme pizza with all the 
      toppings was added to the Pizza Runner menu?
      */
+    USE [pizza_runner]
+GO
+INSERT INTO
+    [dbo].[pizza_names] ([pizza_id], [pizza_name])
+VALUES
+    (3, 'Supreme pizza');
+
+GO
+    /*------------------------------------------------------------*/
+INSERT INTO
+    [dbo].[pizza_recipes] ([pizza_id], [toppings])
+VALUES
+    (3, '1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12');
+
+GO
