@@ -124,7 +124,6 @@ from
     cross apply planed_cuso pc
     /*========================================================================*/
     -- 7 - What is the customer count and percentage breakdown of all 5 plan_name values at 2020-12-31?
-    -- 7 - What is the customer count and percentage breakdown of all 5 plan_name values at 2020-12-31?
 ;
 
 with cus_cnt_pln as(
@@ -238,7 +237,42 @@ order by
     [start_date]
     /*========================================================================*/
     -- 11 - How many customers downgraded from a pro monthly to a basic monthly plan in 2020?
-    -- ************************************************* C. Challenge Payment Question
+;
+
+with cus_max as (
+    SELECT
+        [customer_id],
+        [plan_id],
+        [start_date],
+        LAG([plan_id]) over (
+            partition by [customer_id]
+            order by
+                [customer_id],
+                [start_date]
+        ) lag_pln,
+        max ([start_date]) over (partition by [customer_id]) [max_start_date]
+    FROM
+        [foodie_fi].[dbo].[subscriptions]
+    where
+        DATEPART(year, [start_date]) = '2020'
+        and [plan_id] in (2, 3)
+),
+cnt_dwngrd as (
+    select
+        [customer_id],
+        [plan_id],
+        lag_pln,
+        [start_date]
+    from
+        cus_max
+    where
+        [start_date] = [max_start_date]
+        and lag_pln > [plan_id]
+)
+select
+    count (*) cnt_dg
+from
+    cnt_dwngrd -- ************************************************* C. Challenge Payment Question
     /*========================================================================*/
     /*
      The Foodie-Fi team wants you to create a new payments table for the year 2020 that includes amounts paid by each customer in the subscriptions table with the following requirements:
