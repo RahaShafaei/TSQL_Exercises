@@ -282,7 +282,167 @@ from
      upgrades from pro monthly to pro annual are paid at the end of the current billing period and also starts at the end of the month period
      once a customer churns they will no longer make payments
      */
-    -- ************************************************* D. Outside The Box Questions
+    CREATE TABLE [dbo].[payments](
+        [customer_id] [int] NULL,
+        [plan_id] [int] NULL,
+        [start_date] [date] NULL,
+        [payment] [decimal](5, 2) NULL
+    ) ON [PRIMARY]
+GO
+    /*--------------------------------------------------------------------------*/
+;
+
+with sun_price as (
+    SELECT
+        ROW_NUMBER() over(
+            order by
+                s.[customer_id]
+        ) id,
+        s.[customer_id],
+        s.[plan_id],
+        s.[start_date],
+        p.price
+    FROM
+        [foodie_fi].[dbo].[subscriptions] s
+        join [foodie_fi].[dbo].plans p on p.plan_id = s.plan_id
+),
+cus_max_1To2 as (
+    SELECT
+        id,
+        [customer_id],
+        [plan_id],
+        price,
+        [start_date],
+        case
+            when plan_id = 1 then DATEADD(day, 30, [start_date])
+            else NULL
+        end as end_pln1,
+        LAG([plan_id]) over (
+            partition by [customer_id]
+            order by
+                [customer_id],
+                [start_date]
+        ) lag_pln,
+        LAG(price) over (
+            partition by [customer_id]
+            order by
+                [customer_id],
+                [start_date]
+        ) lag_prc,
+        max ([start_date]) over (partition by [customer_id]) [max_start_date]
+    FROM
+        sun_price
+    where
+        [plan_id] in (1, 2)
+),
+upg_1TO2 as(
+    select
+        id,
+        [customer_id],
+        [plan_id],
+        [max_start_date] as [start_date],
+        [price] - lag_prc as [price]
+    from
+        cus_max_1To2
+    where
+        [start_date] = [max_start_date]
+        and lag_pln < [plan_id]
+        and [max_start_date] < end_pln1
+),
+cus_max_2To3 as (
+    SELECT
+        id,
+        [customer_id],
+        [plan_id],
+        price,
+        [start_date],
+        case
+            when plan_id = 2 then DATEADD(day, 30, [start_date])
+            else NULL
+        end as end_pln2,
+        LAG([plan_id]) over (
+            partition by [customer_id]
+            order by
+                [customer_id],
+                [start_date]
+        ) lag_pln,
+        LAG(price) over (
+            partition by [customer_id]
+            order by
+                [customer_id],
+                [start_date]
+        ) lag_prc,
+        max ([start_date]) over (partition by [customer_id]) [max_start_date]
+    FROM
+        sun_price
+    where
+        [plan_id] in (2, 3)
+),
+upg_2TO3 as(
+    select
+        id,
+        [customer_id],
+        [plan_id],
+        end_pln2 as [start_date],
+        [price]
+    from
+        cus_max_2To3
+    where
+        [start_date] = [max_start_date]
+        and lag_pln < [plan_id]
+        and [max_start_date] < end_pln2
+)
+INSERT INTO
+    [dbo].[payments] (
+        [customer_id],
+        [plan_id],
+        [start_date],
+        [payment]
+    )
+select
+    [customer_id],
+    [plan_id],
+    [start_date],
+    price payment
+from
+    (
+        select
+            id,
+            [customer_id],
+            [plan_id],
+            [start_date],
+            price
+        from
+            sun_price
+        where
+            id not in (
+                select
+                    id
+                FROM
+                    upg_1TO2
+                UNION
+                select
+                    id
+                FROM
+                    upg_2TO3
+            )
+    ) as tem
+UNION
+select
+    [customer_id],
+    [plan_id],
+    [start_date],
+    price
+FROM
+    upg_1TO2
+UNION
+select
+    [customer_id],
+    [plan_id],
+    [start_date],
+    price
+FROM
+    upg_2TO3 -- ************************************************* D. Outside The Box Questions
     /*========================================================================*/
     -- 1 - How would you calculate the rate of growth for Foodie-Fi?
     /*========================================================================*/
