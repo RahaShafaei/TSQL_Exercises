@@ -154,10 +154,88 @@ group by
     cnt_pln
     /*========================================================================*/
     -- 8 - How many customers have upgraded to an annual plan in 2020?
+SELECT
+    count(*) cus_upg
+FROM
+    [foodie_fi].[dbo].[subscriptions]
+where
+    plan_id = 3
+    and datepart(year, [start_date]) = '2020'
     /*========================================================================*/
     -- 9 - How many days on average does it take for a customer to an annual plan from the day they join Foodie-Fi?
+;
+
+with tri_anu_dte as(
+    SELECT
+        [customer_id],
+        [plan_id],
+        [start_date],
+        min(
+            case
+                when [plan_id] = 0 then [start_date]
+                else NULL
+            end
+        ) over (partition by [customer_id]) trial_date,
+        min(
+            case
+                when [plan_id] = 3 then [start_date]
+                else NULL
+            end
+        ) over (partition by [customer_id]) annual_date
+    FROM
+        [foodie_fi].[dbo].[subscriptions]
+),
+date_diff as (
+    select
+        [customer_id],
+        DATEDIFF(day, trial_date, annual_date) avg_anual
+    from
+        tri_anu_dte
+    where
+        annual_date is not null
+    group by
+        [customer_id],
+        trial_date,
+        annual_date
+)
+select
+    avg(avg_anual) avg_anual
+from
+    date_diff
     /*========================================================================*/
     -- 10 - Can you further breakdown this average value into 30 day periods (i.e. 0-30 days, 31-60 days etc)
+;
+
+with cnt_pln_3 as (
+    SELECT
+        [customer_id],
+        [plan_id],
+        [start_date],
+        sum (
+            case
+                when plan_id = 3 then 1
+                else 0
+            end
+        ) over(
+            order by
+                [start_date] ROWS UNBOUNDED PRECEDING
+        ) cnt_pln
+    FROM
+        [foodie_fi].[dbo].[subscriptions]
+)
+select
+    [customer_id],
+    [plan_id],
+    [start_date],
+    avg(cnt_pln) over (
+        order by
+            [start_date] ROWS BETWEEN 30 PRECEDING
+            AND CURRENT ROW
+    )
+from
+    cnt_pln_3
+order by
+    [start_date]
     /*========================================================================*/
     -- 11 - How many customers downgraded from a pro monthly to a basic monthly plan in 2020?
     -- ************************************************* C. Challenge Payment Question
