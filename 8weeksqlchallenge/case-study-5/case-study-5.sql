@@ -332,10 +332,55 @@ group by
    Using this analysis approach - answer the following questions:*/
   /*======================================================================== */
   -- 1 - What is the total sales for the 4 weeks before and after 2020-06-15? What is the growth or reduction rate in actual values and percentage of sales?
+SELECT
+  sum(cast([sales] as decimal(38, 2))) tot_sale
+FROM
+  [data_mart].[dbo].[clean_weekly_sales]
+where
+  [week_date] > DATEADD(WEEK, -4, cast('2020-06-15' as DATE))
+  and [week_date] < DATEADD(WEEK, 4, cast('2020-06-15' as DATE))
+  and [week_date] != cast('2020-06-15' as DATE)
   /*======================================================================== */
   -- 2 - What about the entire 12 weeks before and after?
+SELECT
+  sum(cast([sales] as decimal(38, 2))) tot_sale
+FROM
+  [data_mart].[dbo].[clean_weekly_sales]
+where
+  [week_date] > DATEADD(WEEK, -12, cast('2020-06-15' as DATE))
+  and [week_date] < DATEADD(WEEK, 12, cast('2020-06-15' as DATE))
+  and [week_date] != cast('2020-06-15' as DATE)
   /*======================================================================== */
   -- 3 - How do the sale metrics for these 2 periods before and after compare with the previous years in 2018 and 2019?
+SELECT
+  '2020-06-15' as yr,
+  sum(cast([sales] as decimal(38, 2))) tot_sale
+FROM
+  [data_mart].[dbo].[clean_weekly_sales]
+where
+  [week_date] > DATEADD(WEEK, -4, cast('2020-06-15' as DATE))
+  and [week_date] < DATEADD(WEEK, 4, cast('2020-06-15' as DATE))
+  and [week_date] != cast('2020-06-15' as DATE)
+UNION
+SELECT
+  '2019-06-15' as yr,
+  sum(cast([sales] as decimal(38, 2))) tot_sale
+FROM
+  [data_mart].[dbo].[clean_weekly_sales]
+where
+  [week_date] > DATEADD(WEEK, -4, cast('2019-06-15' as DATE))
+  and [week_date] < DATEADD(WEEK, 4, cast('2019-06-15' as DATE))
+  and [week_date] != cast('2019-06-15' as DATE)
+UNION
+SELECT
+  '2018-06-15' as yr,
+  sum(cast([sales] as decimal(38, 2))) tot_sale
+FROM
+  [data_mart].[dbo].[clean_weekly_sales]
+where
+  [week_date] > DATEADD(WEEK, -4, cast('2018-06-15' as DATE))
+  and [week_date] < DATEADD(WEEK, 4, cast('2018-06-15' as DATE))
+  and [week_date] != cast('2018-06-15' as DATE)
   /* ************************************************* 4. Bonus Question*/
   /* Which areas of the business have the highest negative impact in sales metrics performance in 2020 for the 12 week before and after period?
    
