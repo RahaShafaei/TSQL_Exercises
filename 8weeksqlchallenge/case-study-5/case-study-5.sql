@@ -411,3 +411,10 @@ group by
   [customer_type]
 order by
   sum(cast([sales] as decimal(38, 2)))
+-----------------------------------------
+/*Part 2:
+region _ platform _ age_band _ demographic _ customer_type _ tot_sale
+OCEANIA	 Retail      unknown	   unknown	      Guest	      1421743531.00
+
+The best group for investment is the group with high characteristics
+*/
