@@ -414,7 +414,7 @@ order by
 -----------------------------------------
 /*Part 2:
 region _ platform _ age_band _ demographic _ customer_type _ tot_sale
-OCEANIA	 Retail      unknown	   unknown	      Guest	      1421743531.00
+OCEANIA	 Retail    unknown	   unknown	   Guest	    1421743531.00
 
 The best group for investment is the group with high characteristics
 */
