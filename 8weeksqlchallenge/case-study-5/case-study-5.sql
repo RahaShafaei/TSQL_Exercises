@@ -87,6 +87,7 @@ select
   end [demographic],
   [sales],
   [transactions],
+  [customer_type],
   cast (([sales] / [transactions]) as decimal(38, 2)) [avg_transaction ] into [data_mart].[dbo].[clean_weekly_sales]
 from
   [data_mart].[dbo].[weekly_sales] ws
@@ -353,7 +354,7 @@ where
   /*======================================================================== */
   -- 3 - How do the sale metrics for these 2 periods before and after compare with the previous years in 2018 and 2019?
 SELECT
-  '2020-06-15' as yr,
+  'Total sale four week befor and after : 2020-06-15' as yr,
   sum(cast([sales] as decimal(38, 2))) tot_sale
 FROM
   [data_mart].[dbo].[clean_weekly_sales]
@@ -363,7 +364,7 @@ where
   and [week_date] != cast('2020-06-15' as DATE)
 UNION
 SELECT
-  '2019-06-15' as yr,
+  'Total sale four week befor and after : 2019-06-15' as yr,
   sum(cast([sales] as decimal(38, 2))) tot_sale
 FROM
   [data_mart].[dbo].[clean_weekly_sales]
@@ -373,7 +374,7 @@ where
   and [week_date] != cast('2019-06-15' as DATE)
 UNION
 SELECT
-  '2018-06-15' as yr,
+  'Total sale four week befor and after : 2018-06-15' as yr,
   sum(cast([sales] as decimal(38, 2))) tot_sale
 FROM
   [data_mart].[dbo].[clean_weekly_sales]
@@ -383,10 +384,30 @@ where
   and [week_date] != cast('2018-06-15' as DATE)
   /* ************************************************* 4. Bonus Question*/
   /* Which areas of the business have the highest negative impact in sales metrics performance in 2020 for the 12 week before and after period?
-   
    region
    platform
    age_band
    demographic
    customer_type
    Do you have any further recommendations for Danny’s team at Data Mart or any interesting insights based off this analysis?*/
+SELECT
+  top 1 region,
+  [platform],
+  age_band,
+  demographic,
+  [customer_type],
+  sum(cast([sales] as decimal(38, 2))) tot_sale
+FROM
+  [data_mart].[dbo].[clean_weekly_sales]
+where
+  [week_date] > DATEADD(WEEK, -12, cast('2020-06-15' as DATE))
+  and [week_date] < DATEADD(WEEK, 12, cast('2020-06-15' as DATE))
+  and [week_date] != cast('2020-06-15' as DATE)
+group by
+  region,
+  [platform],
+  age_band,
+  demographic,
+  [customer_type]
+order by
+  sum(cast([sales] as decimal(38, 2)))
