@@ -122,8 +122,37 @@ order by
   count(*) desc
   /*======================================================================== */
   -- 8 - What is the number of views and cart adds for each product category?
+SELECT
+  ph.product_category,
+  count([visit_id]) cnt_vst,
+  count(
+    case
+      when [event_type] = 2 then [event_type]
+      else NULL
+    end
+  ) cnt_cart_add
+FROM
+  [clique_bait].[dbo].[events] e
+  join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+  and [product_category] is not null
+group by
+  ph.product_category
   /*======================================================================== */
   -- 9 - What are the top 3 products by purchases?
+SELECT
+  top 3 ph.page_name,
+  count(*) cnt_product
+FROM
+  [clique_bait].[dbo].[events] e
+  join [clique_bait].[dbo].[events] e_purch on e.visit_id = e_purch.visit_id
+  and e_purch.[event_type] = 3
+  join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+where
+  e.[event_type] = 2
+group by
+  ph.page_name
+order by
+  count(*) desc
   /*======================================================================== */
   /* ************************************************* 3. Product Funnel Analysis*/
   /* Using a single SQL query - create a new output table which has the following details:
@@ -132,10 +161,220 @@ order by
    How many times was each product added to a cart but not purchased (abandoned)?
    How many times was each product purchased?
    Additionally, create another table which further aggregates the data for the above points but this time for each product category instead of individual products.*/
+  /*++++Create [clique_bait].[dbo].[product_counts] table ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+;
+
+with vis_not_purch as(
+  select
+    distinct e.visit_id
+  from
+    [clique_bait].[dbo].[events] e
+  where
+    e.[event_type] != 3
+    and not EXISTS (
+      select
+        distinct visit_id
+      from
+        [clique_bait].[dbo].[events] e1
+      where
+        e1.[event_type] = 3
+        and e1.visit_id = e.visit_id
+    )
+)
+select
+  page_name,
+  [Page_View],
+  [Add_to_Cart],
+  [Add_to_Cart_not_Purchased],
+  [Purchased] into [clique_bait].[dbo].product_counts
+from
+  (
+    select
+      *
+    from
+      (
+        SELECT
+          'Page_View' event_name,
+          ph.page_name,
+          count(*) cnt
+        FROM
+          [clique_bait].[dbo].[events] e
+          join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+          and ph.product_category is not null
+        where
+          e.[event_type] = 1
+        group by
+          ph.page_name
+        union
+        SELECT
+          'Add_to_Cart' event_name,
+          ph.page_name,
+          count(*) cnt_add_cart
+        FROM
+          [clique_bait].[dbo].[events] e
+          join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+          and ph.product_category is not null
+        where
+          e.[event_type] = 2
+        group by
+          ph.page_name
+        union
+        SELECT
+          'Add_to_Cart_not_Purchased' event_name,
+          ph.page_name,
+          count(*) cnt_not_purch
+        FROM
+          [clique_bait].[dbo].[events] e
+          join vis_not_purch on vis_not_purch.visit_id = e.visit_id
+          join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+          and ph.product_category is not null
+        where
+          e.[event_type] = 2
+        group by
+          ph.page_name
+        union
+        SELECT
+          'Purchased' event_name,
+          ph.page_name,
+          count(*) cnt_product
+        FROM
+          [clique_bait].[dbo].[events] e
+          join [clique_bait].[dbo].[events] e_purch on e.visit_id = e_purch.visit_id
+          and e_purch.[event_type] = 3
+          join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+          and ph.product_category is not null
+        where
+          e.[event_type] = 2
+        group by
+          ph.page_name
+      ) as tb1 PIVOT(
+        sum(cnt) FOR event_name IN (
+          [Page_View],
+          [Add_to_Cart],
+          [Add_to_Cart_not_Purchased],
+          [Purchased]
+        )
+      ) AS pivot_table
+  ) as tb2
+  /*+++++++Create [clique_bait].[dbo].[product_category_counts] table +++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+;
+
+with vis_not_purch as(
+  select
+    distinct e.visit_id
+  from
+    [clique_bait].[dbo].[events] e
+  where
+    e.[event_type] != 3
+    and not EXISTS (
+      select
+        distinct visit_id
+      from
+        [clique_bait].[dbo].[events] e1
+      where
+        e1.[event_type] = 3
+        and e1.visit_id = e.visit_id
+    )
+)
+select
+  product_category,
+  [Page_View],
+  [Add_to_Cart],
+  [Add_to_Cart_not_Purchased],
+  [Purchased] into [clique_bait].[dbo].[product_category_counts]
+from
+  (
+    select
+      *
+    from
+      (
+        SELECT
+          'Page_View' event_name,
+          ph.[product_category],
+          count(*) cnt
+        FROM
+          [clique_bait].[dbo].[events] e
+          join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+          and ph.product_category is not null
+        where
+          e.[event_type] = 1
+        group by
+          ph.[product_category]
+        union
+        SELECT
+          'Add_to_Cart' event_name,
+          ph.[product_category],
+          count(*) cnt_add_cart
+        FROM
+          [clique_bait].[dbo].[events] e
+          join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+          and ph.product_category is not null
+        where
+          e.[event_type] = 2
+        group by
+          ph.[product_category]
+        union
+        SELECT
+          'Add_to_Cart_not_Purchased' event_name,
+          ph.[product_category],
+          count(*) cnt_not_purch
+        FROM
+          [clique_bait].[dbo].[events] e
+          join vis_not_purch on vis_not_purch.visit_id = e.visit_id
+          join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+          and ph.product_category is not null
+        where
+          e.[event_type] = 2
+        group by
+          ph.[product_category]
+        union
+        SELECT
+          'Purchased' event_name,
+          ph.[product_category],
+          count(*) cnt_product
+        FROM
+          [clique_bait].[dbo].[events] e
+          join [clique_bait].[dbo].[events] e_purch on e.visit_id = e_purch.visit_id
+          and e_purch.[event_type] = 3
+          join [clique_bait].[dbo].[page_hierarchy] ph on e.page_id = ph.page_id
+          and ph.product_category is not null
+        where
+          e.[event_type] = 2
+        group by
+          ph.[product_category]
+      ) as tb1 PIVOT(
+        sum(cnt) FOR event_name IN (
+          [Page_View],
+          [Add_to_Cart],
+          [Add_to_Cart_not_Purchased],
+          [Purchased]
+        )
+      ) AS pivot_table
+  ) as tb2
   /*======================================================================== */
   -- 1 - Which product had the most views, cart adds and purchases?
+SELECT
+  top 1 [page_name],
+  [Page_View],
+  [Add_to_Cart],
+  [Purchased]
+FROM
+  [clique_bait].[dbo].[product_counts]
+order by
+  [Page_View] desc,
+  [Add_to_Cart] desc,
+  [Purchased] desc
   /*======================================================================== */
   -- 2 - Which product was most likely to be abandoned?
+SELECT
+  top 1 [page_name],
+  [Page_View],
+  [Add_to_Cart],
+  [Purchased]
+FROM
+  [clique_bait].[dbo].[product_counts]
+order by
+  [Purchased]
   /*======================================================================== */
   -- 3 - Which product had the highest view to purchase percentage?
   /*======================================================================== */
