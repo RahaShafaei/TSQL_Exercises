@@ -427,3 +427,94 @@ FROM
    What is the uplift in purchase rate when comparing users who click on a campaign impression versus users who do not receive an impression? What if we compare them with users who just an impression but do not click?
    What metrics can you use to quantify the success or failure of each campaign compared to eachother?
    */
+;
+
+with visivt_calc as (
+  SELECT
+    e.[visit_id],
+    u.[user_id],
+    min(e.[event_time]) over(partition by e.[visit_id]) as [visit_start_time],
+    count(
+      case
+        when ei.event_name = 'Page View' then ei.event_name
+        else NULL
+      end
+    ) over(partition by e.[visit_id]) as [page_views],
+    count(
+      case
+        when ei.event_name = 'Add to Cart' then ei.event_name
+        else NULL
+      end
+    ) over(partition by e.[visit_id]) as [cart_adds],
+case
+      when e_purch.visit_id is not null then 1
+      else 0
+    end [purchase],
+    count(
+      case
+        when ei.event_name = 'Ad Impression' then ei.event_name
+        else NULL
+      end
+    ) over(partition by e.[visit_id]) as [impression],
+    max(e.[sequence_number]) over(partition by e.[visit_id]) as [click],
+(
+      SELECT
+        LEFT(p_name, LEN(p_name) - 1)
+      FROM
+        (
+          SELECT
+            ph1.page_name + ', '
+          FROM
+            [clique_bait].[dbo].[events] e1
+            join [clique_bait].[dbo].[page_hierarchy] ph1 on ph1.page_id = e1.page_id
+            and ph1.product_id is not null
+            and e1.event_type = 2
+          where
+            e1.[visit_id] = e.[visit_id]
+          order by
+            e1.[visit_id],
+            e1.sequence_number FOR XML PATH ('')
+        ) c (p_name)
+    ) as [cart_products]
+  FROM
+    [clique_bait].[dbo].[events] e
+    join [clique_bait].[dbo].[users] u on e.cookie_id = u.cookie_id
+    join [clique_bait].[dbo].event_identifier ei on ei.event_type = e.event_type
+    left join [clique_bait].[dbo].[events] e_purch on e.visit_id = e_purch.visit_id
+    and e_purch.event_type = 3
+    left join [clique_bait].[dbo].[page_hierarchy] ph on ph.page_id = e.page_id
+    and ph.product_id is not null
+    and e.event_type = 2
+)
+select
+  ROW_NUMBER() over(
+    order by
+      [visit_id]
+  ) id,
+  [visit_id],
+  [user_id],
+  [visit_start_time],
+  [page_views],
+  [cart_adds],
+  [purchase],
+  [campaign_name],
+  [impression],
+  [click],
+  [cart_products] into [clique_bait].[dbo].[campaigns_analysis]
+from
+  visivt_calc v
+  left join [clique_bait].[dbo].[campaign_identifier] c on v.visit_start_time >= c.start_date
+  and v.visit_start_time <= c.end_date
+group by
+  [visit_id],
+  [user_id],
+  [visit_start_time],
+  [page_views],
+  [cart_adds],
+  [purchase],
+  [impression],
+  [click],
+  c.campaign_name,
+  [cart_products]
+order by
+  [visit_id]
