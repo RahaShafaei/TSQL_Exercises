@@ -377,10 +377,37 @@ order by
   [Purchased]
   /*======================================================================== */
   -- 3 - Which product had the highest view to purchase percentage?
+SELECT
+  top 1 [page_name],
+  [Page_View],
+  [Add_to_Cart],
+  [Add_to_Cart_not_Purchased],
+  [Purchased],
+  (
+    cast ([Purchased] as decimal(38, 2)) / sum(cast([Purchased] as decimal(38, 2))) over()
+  ) * 100 tot_purch
+FROM
+  [clique_bait].[dbo].[product_counts]
+order by
+  (
+    cast ([Purchased] as decimal(38, 2)) / sum(cast([Purchased] as decimal(38, 2))) over()
+  ) * 100 desc
   /*======================================================================== */
   -- 4 - What is the average conversion rate from view to cart add?
+SELECT
+  top 1 avg(
+    cast([Add_to_Cart] as decimal(38, 2)) / cast([Page_View] as decimal(38, 2)) * 100
+  ) over() prc_viw_cart
+FROM
+  [clique_bait].[dbo].[product_counts]
   /*======================================================================== */
   -- 5 - What is the average conversion rate from cart add to purchase?
+SELECT
+  top 1 avg(
+    cast([Purchased] as decimal(38, 2)) / cast([Add_to_Cart] as decimal(38, 2)) * 100
+  ) over() prc_viw_cart
+FROM
+  [clique_bait].[dbo].[product_counts]
   /* ************************************************* 3. Campaigns Analysis*/
   /* Generate a table that has 1 single row for every unique visit_id record and has the following columns:
    user_id
