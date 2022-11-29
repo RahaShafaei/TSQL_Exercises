@@ -522,3 +522,72 @@ order by
   /* ************************************************* Bonus Challenge*/
   /* Use a single SQL query to transform the product_hierarchy and product_prices datasets to the product_details table.
    Hint: you may want to consider using a recursive CTE to solve this problem!*/
+  WITH Subs AS (
+    SELECT
+      [id] [category_id],
+      [level_text] [category_name],
+      NULL [segment_id],
+      NULL [segment_parent_id],
+      cast (NULL as varchar(19)) [segment_name],
+      NULL [style_id],
+      NULL [style_parent_id],
+      cast (NULL as varchar(19)) [style_name],
+      0 AS lvl
+    FROM
+      [ balanced_tree].[dbo].[product_hierarchy]
+    WHERE
+      [parent_id] is NULL
+    UNION
+    ALL
+    SELECT
+      p.[category_id],
+      p.[category_name],
+case
+        when p.lvl = 0 then c.id
+        else p.segment_id
+      end [segment_id],
+case
+        when p.lvl = 0 then c.parent_id
+        else p.segment_parent_id
+      end [segment_parent_id],
+case
+        when p.lvl = 0 then c.level_text
+        else p.segment_name
+      end [segment_name],
+case
+        when p.lvl = 1 then c.id
+        else p.style_id
+      end [style_id],
+case
+        when p.lvl = 1 then c.parent_id
+        else p.style_parent_id
+      end [style_parent_id],
+case
+        when p.lvl = 1 then c.level_text
+        else p.style_name
+      end [style_name],
+      P.lvl + 1
+    FROM
+      Subs AS P
+      INNER JOIN [ balanced_tree].[dbo].[product_hierarchy] AS C ON C.[parent_id] = case
+        when p.lvl = 0 then p.[category_id]
+        when p.lvl = 1 then p.[segment_id]
+      end
+  )
+SELECT
+  p.[product_id],
+  p.[price],
+  [category_id],
+  [segment_id],
+  [style_id],
+  [category_name],
+  [segment_name],
+  [style_name]
+FROM
+  Subs
+  join [ balanced_tree].[dbo].[product_prices] p on p.id = Subs.style_id
+where
+  [style_name] is not null
+order by
+  [segment_id],
+  [style_id];
