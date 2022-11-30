@@ -378,11 +378,141 @@ order by
      Average composition can be calculated by dividing the composition column by the index_value column rounded to 2 decimal places.*/
     /*======================================================================== */
     -- 1 - What is the top 10 interests by the average composition for each month?
+;
+
+with clc_avg_comp as (
+    SELECT
+        ROW_NUMBER() over(
+            partition by [month_year]
+            order by
+                ROUND ([composition] / [index_value], 2) desc
+        ) rn,
+        [month_year],
+        [interest_id],
+        ROUND ([composition] / [index_value], 2) [average_composition]
+    FROM
+        [fresh_segments].[dbo].[interest_metrics]
+    where
+        interest_id is not null
+        and [month_year] is not null
+)
+select
+    rn,
+    [month_year],
+    [interest_id],
+    [average_composition]
+from
+    clc_avg_comp
+where
+    rn < 11
     /*======================================================================== */
     -- 2 - For all of these top 10 interests - which interest appears the most often?
+;
+
+with clc_avg_comp as (
+    SELECT
+        ROW_NUMBER() over(
+            partition by [month_year]
+            order by
+                ROUND ([composition] / [index_value], 2) desc
+        ) rn,
+        [month_year],
+        [interest_id],
+        ROUND ([composition] / [index_value], 2) [average_composition]
+    FROM
+        [fresh_segments].[dbo].[interest_metrics]
+    where
+        interest_id is not null
+        and [month_year] is not null
+)
+select
+    [interest_id],
+    count(*) cnt_int
+from
+    clc_avg_comp
+where
+    rn < 11
+group by
+    [interest_id]
+having
+    count(*) = (
+        select
+            top 1 count(*) cnt_int
+        from
+            clc_avg_comp
+        where
+            rn < 11
+        group by
+            [interest_id]
+        order by
+            count(*) desc
+    )
     /*======================================================================== */
     -- 3 - What is the average of the average composition for the top 10 interests for each month?
+;
+
+with clc_avg_comp as (
+    SELECT
+        ROW_NUMBER() over(
+            partition by [month_year]
+            order by
+                ROUND ([composition] / [index_value], 2) desc
+        ) rn,
+        [month_year],
+        [interest_id],
+        ROUND ([composition] / [index_value], 2) [average_composition]
+    FROM
+        [fresh_segments].[dbo].[interest_metrics]
+    where
+        interest_id is not null
+        and [month_year] is not null
+)
+select
+    [month_year],
+    avg([average_composition]) clc_avg
+from
+    clc_avg_comp
+where
+    rn < 11
+group by
+    [month_year]
     /*======================================================================== */
     -- 4 - What is the 3 month rolling average of the max average composition value from September 2018 to August 2019 and include the previous top ranking interests in the same output shown below.
+    /*Description of rolling average: https://learnsql.com/blog/moving-average-in-sql/ */
+
+    /*This answer is not complete.*/
+;
+
+with clc_avg_comp as (
+    SELECT
+        ROW_NUMBER() over(
+            partition by [month_year]
+            order by
+                ROUND ([composition] / [index_value], 2) desc
+        ) rn,
+        [month_year],
+        [interest_id],
+        ROUND ([composition] / [index_value], 2) [average_composition]
+    FROM
+        [fresh_segments].[dbo].[interest_metrics]
+    where
+        interest_id is not null
+        and [month_year] is not null
+)
+select
+    [month_year],
+    avg([average_composition]) OVER(
+        ORDER BY
+            [month_year] ROWS BETWEEN 3 PRECEDING
+            AND CURRENT ROW
+    ) as moving_average
+from
+    clc_avg_comp
+where
+    rn = 1
+    and [month_year] >= '2018-09-01'
+    and [month_year] <= '2019-08-01'
+order by
+    [month_year]
     /*======================================================================== */
     -- 5 - Provide a possible reason why the max average composition might change from month to month? Could it signal something is not quite right with the overall business model for Fresh Segments?
