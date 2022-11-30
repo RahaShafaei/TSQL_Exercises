@@ -222,12 +222,155 @@ group by
     /* ************************************************* Segment Analysis*/
     /*======================================================================== */
     -- 1 - Using our filtered dataset by removing the interests with less than 6 months worth of data, which are the top 10 and bottom 10 interests which have the largest composition values in any month_year? Only use the maximum composition value for each interest but you must keep the corresponding month_year
+DELETE FROM
+    [fresh_segments].[dbo].[interest_metrics]
+WHERE
+    exists (
+        select
+            [interest_id],
+            [month_year]
+        from
+            (
+                select
+                    [interest_id],
+                    [month_year],
+                    sum(1) over (partition by [interest_id]) sm_int
+                FROM
+                    [fresh_segments].[dbo].[interest_metrics]
+                where
+                    [month_year] is not null
+                group by
+                    [interest_id],
+                    [month_year]
+            ) cnt_interest
+        where
+            sm_int < 6
+            and cnt_interest.interest_id = [fresh_segments].[dbo].[interest_metrics].interest_id
+            and cnt_interest.[month_year] = [fresh_segments].[dbo].[interest_metrics].[month_year]
+    )
+    /*--+++++++++++++++++++++++++++++++++++++++++++++++*/
+;
+
+with clc_rnk as (
+    SELECT
+        ROW_NUMBER() over(
+            partition by [interest_id]
+            order by
+                [composition] desc
+        ) rn,
+        [month_year],
+        [interest_id],
+        [composition]
+    FROM
+        [fresh_segments].[dbo].[interest_metrics]
+    where
+        interest_id is not null
+)
+select
+    top 10 [month_year],
+    [interest_id],
+    [composition]
+from
+    clc_rnk
+where
+    rn = 1
+order by
+    [composition] desc
+    /* --+++++++++++++++++++++++++++++++++++++++++++++++*/
+;
+
+with clc_rnk as (
+    SELECT
+        ROW_NUMBER() over(
+            partition by [interest_id]
+            order by
+                [composition] desc
+        ) rn,
+        [month_year],
+        [interest_id],
+        [composition]
+    FROM
+        [fresh_segments].[dbo].[interest_metrics]
+    where
+        interest_id is not null
+)
+select
+    top 10 [month_year],
+    [interest_id],
+    [composition]
+from
+    clc_rnk
+where
+    rn = 1
+order by
+    [composition]
     /*======================================================================== */
     -- 2 - Which 5 interests had the lowest average ranking value?
+SELECT
+    top 5 [interest_id],
+    avg([ranking]) avg_rnk
+FROM
+    [fresh_segments].[dbo].[interest_metrics]
+group by
+    [interest_id]
+order by
+    avg([ranking])
     /*======================================================================== */
     -- 3 - Which 5 interests had the largest standard deviation in their percentile_ranking value?
+SELECT
+    top 5 [interest_id],
+    STDEV([percentile_ranking]) avg_rnk
+FROM
+    [fresh_segments].[dbo].[interest_metrics]
+where
+    interest_id is not null
+group by
+    [interest_id]
+order by
+    STDEV([percentile_ranking]) desc
     /*======================================================================== */
     -- 4 - For the 5 interests found in the previous question - what was minimum and maximum percentile_ranking values for each interest and its corresponding year_month value? Can you describe what is happening for these 5 interests?
+    /* For the 5 interests found in the previous question - 
+     what was minimum and maximum percentile_ranking values for each interest and its corresponding year_month value? 
+     Can you describe what is happening for these 5 interests?*/
+;
+
+with std_int as (
+    SELECT
+        top 5 [interest_id],
+        STDEV([percentile_ranking]) avg_rnk,
+        min([percentile_ranking]) min_percentile,
+        max([percentile_ranking]) max_percentile
+    FROM
+        [fresh_segments].[dbo].[interest_metrics]
+    where
+        interest_id is not null
+    group by
+        [interest_id]
+    order by
+        STDEV([percentile_ranking]) desc
+)
+select
+    'min_percentile_ranking' [min_percentile],
+    im.[interest_id],
+    im.month_year,
+    im.[percentile_ranking]
+from
+    [fresh_segments].[dbo].[interest_metrics] im
+    join std_int on im.interest_id = std_int.interest_id
+    and im.[percentile_ranking] = std_int.min_percentile
+UNION
+select
+    'max_percentile_ranking' [max_percentile],
+    im.[interest_id],
+    im.month_year,
+    im.[percentile_ranking]
+from
+    [fresh_segments].[dbo].[interest_metrics] im
+    join std_int on im.interest_id = std_int.interest_id
+    and im.[percentile_ranking] = std_int.max_percentile
+order by
+    im.[interest_id]
     /*======================================================================== */
     -- 5 - How would you describe our customers in this segment based off their composition and ranking values? What sort of products or services should we show to these customers and what should we avoid?
     /* ************************************************* Index Analysis*/
