@@ -17,3 +17,6 @@ https://8weeksqlchallenge.com/
     1. [case-study-7.sql](https://github.com/RahaShafaei/TSQL_Exercises/blob/main/8weeksqlchallenge/case-study-7/case-study-7.sql)
 1. [Case Study #8 - Fresh Segments](https://8weeksqlchallenge.com/case-study-8/)
     1. [case-study-8.sql](https://github.com/RahaShafaei/TSQL_Exercises/blob/main/8weeksqlchallenge/case-study-8/case-study-8.sql)
+
+_______________________________________________________________________
+> These codes are written with sql server 17.9.
